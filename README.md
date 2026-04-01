@@ -4,10 +4,10 @@ Wintouch is a touch-first Windows launcher built with Electron and Next.js.
 
 ## Current scope
 
-- Scan Windows Start Menu and Desktop shortcuts.
+- Scan Windows Start Menu and Desktop folders for executables.
 - Show a large-tile launcher surface optimized for landscape tablets.
 - Pin frequently used apps locally.
-- Launch shortcuts, URLs, and executables through Electron.
+- Launch discovered executables through Electron.
 
 ## Run locally
 
@@ -27,6 +27,7 @@ npm run electron:build
 ## Notes
 
 - The current app discovery pass reads Start Menu and Desktop locations only.
+- Shortcut files such as `.lnk` are ignored during discovery.
 - Pin state is stored in browser local storage inside the desktop shell.
 - The UI is designed for touch targets first, not mouse-dense desktop layouts.
 

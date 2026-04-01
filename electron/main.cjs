@@ -43,7 +43,7 @@ function shouldSkipDirectory(entryName) {
 
 function isLaunchableFile(entryName) {
   const extension = path.extname(entryName).toLowerCase();
-  return extension === '.lnk' || extension === '.url' || extension === '.exe';
+  return extension === '.exe';
 }
 
 function collectLaunchables(rootPath, depth = 0) {
@@ -52,8 +52,9 @@ function collectLaunchables(rootPath, depth = 0) {
   }
 
   const entries = [];
+  let hasExecutableInDirectory = false;
 
-  for (const dirent of fs.readdirSync(rootPath, { withFileTypes: true })) {
+  for (const dirent of fs.readdirSync(rootPath, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
     const fullPath = path.join(rootPath, dirent.name);
 
     if (dirent.isDirectory()) {
@@ -69,10 +70,16 @@ function collectLaunchables(rootPath, depth = 0) {
       continue;
     }
 
+    if (hasExecutableInDirectory) {
+      continue;
+    }
+
     const name = path.basename(dirent.name, path.extname(dirent.name)).replace(/[-_]+/g, ' ').trim();
     if (!name) {
       continue;
     }
+
+    hasExecutableInDirectory = true;
 
     entries.push({
       id: hashPath(fullPath),
