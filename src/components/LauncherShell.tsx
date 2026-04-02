@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { LaunchResult, LaunchableApp } from "@/lib/types";
+import type { LaunchResult, LaunchableApp, ScanConfig } from "@/lib/types";
+import { SetupScreen } from "./SetupScreen";
 
 const PIN_STORAGE_KEY = "wintouch.pinned-apps";
 
@@ -10,7 +11,10 @@ declare global {
     wintouch?: {
       listApps: () => Promise<LaunchableApp[]>;
       launchApp: (targetPath: string) => Promise<LaunchResult>;
-      getPlatform: () => Promise<string>;
+      getScanConfig: () => Promise<ScanConfig | null>;
+      saveScanConfig: (config: ScanConfig) => Promise<void>;
+      getSuggestedFolders: () => Promise<unknown[]>;
+      pickFolder: () => Promise<string | null>;
     };
   }
 }
@@ -38,10 +42,10 @@ export function LauncherShell() {
   const [apps, setApps] = useState<LaunchableApp[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [platform, setPlatform] = useState<string>("unknown");
   const [isLoading, setIsLoading] = useState(true);
   const [launchingId, setLaunchingId] = useState<string | null>(null);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const now = useClock();
 
   useEffect(() => {
@@ -70,13 +74,8 @@ export function LauncherShell() {
     setError(null);
 
     try {
-      const [items, currentPlatform] = await Promise.all([
-        window.wintouch.listApps(),
-        window.wintouch.getPlatform(),
-      ]);
-
+      const items = await window.wintouch.listApps();
       setApps(items);
-      setPlatform(currentPlatform);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load installed apps.");
     } finally {
@@ -85,7 +84,19 @@ export function LauncherShell() {
   }
 
   useEffect(() => {
-    void loadApps();
+    if (!window.wintouch) {
+      setNeedsSetup(false);
+      return;
+    }
+
+    window.wintouch.getScanConfig().then((config) => {
+      if (!config || !config.setupComplete) {
+        setNeedsSetup(true);
+      } else {
+        setNeedsSetup(false);
+        void loadApps();
+      }
+    });
   }, []);
 
   const filteredApps = useMemo(() => {
@@ -143,23 +154,23 @@ export function LauncherShell() {
     day: "numeric",
   });
 
+  if (needsSetup === null) {
+    return <main className="shell"><p className="status">Loading...</p></main>;
+  }
+
+  if (needsSetup) {
+    return (
+      <SetupScreen
+        onComplete={() => {
+          setNeedsSetup(false);
+          void loadApps();
+        }}
+      />
+    );
+  }
+
   return (
     <main className="shell">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Touch-first Windows launcher</p>
-          <h1>Wintouch</h1>
-          <p className="hero-copy">
-            Large targets, fast search, and a cleaner home screen for landscape tablets.
-          </p>
-        </div>
-        <div className="hero-meta">
-          <div className="clock">{formattedTime}</div>
-          <div className="date">{formattedDate}</div>
-          <div className="platform">Platform: {platform}</div>
-        </div>
-      </section>
-
       <section className="toolbar">
         <label className="search-field">
           <span>Search apps</span>
@@ -170,6 +181,10 @@ export function LauncherShell() {
             inputMode="search"
           />
         </label>
+        <div className="toolbar-meta">
+          <div className="clock">{formattedTime}</div>
+          <div className="date">{formattedDate}</div>
+        </div>
         <button className="action-button" type="button" onClick={() => void loadApps()}>
           Refresh library
         </button>
