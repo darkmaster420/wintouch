@@ -3,16 +3,6 @@
 import { useEffect, useState } from "react";
 import type { SuggestedFolder, ScanConfig } from "@/lib/types";
 
-declare global {
-  interface Window {
-    wintouch?: {
-      getSuggestedFolders: () => Promise<SuggestedFolder[]>;
-      saveScanConfig: (config: ScanConfig) => Promise<void>;
-      pickFolder: () => Promise<string | null>;
-    };
-  }
-}
-
 type Props = {
   onComplete: () => void;
 };
@@ -66,6 +56,8 @@ export function SetupScreen({ onComplete }: Props) {
     const config: ScanConfig = {
       scanFolders: [...selected, ...custom.filter((c) => !selected.has(c))],
       setupComplete: true,
+      approvedApps: [],
+      rejectedApps: [],
     };
     await window.wintouch?.saveScanConfig(config);
     onComplete();

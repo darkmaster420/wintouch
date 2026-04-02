@@ -32,6 +32,44 @@ function getNodeCommand() {
   return process.platform === 'win32' ? 'node.exe' : 'node';
 }
 
+/* ---------- icon extraction ---------- */
+
+function getIconCacheDir() {
+  const dir = path.join(app.getPath('userData'), 'icon-cache');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+async function extractIcon(exePath) {
+  const id = hashPath(exePath);
+  const cachePath = path.join(getIconCacheDir(), `${id}.png`);
+  if (fs.existsSync(cachePath)) return cachePath;
+
+  try {
+    const icon = await app.getFileIcon(exePath, { size: 'large' });
+    const png = icon.toPNG();
+    if (png.length > 0) {
+      fs.writeFileSync(cachePath, png);
+      return cachePath;
+    }
+  } catch {
+    // icon extraction failed — no icon
+  }
+  return null;
+}
+
+async function attachIcons(entries) {
+  const results = [];
+  for (const entry of entries) {
+    const iconPath = await extractIcon(entry.path);
+    results.push({
+      ...entry,
+      icon: iconPath ? `file://${iconPath.replace(/\\/g, '/')}` : undefined,
+    });
+  }
+  return results;
+}
+
 /* ---------- scan-config persistence ---------- */
 
 function getConfigPath() {
@@ -150,16 +188,46 @@ function collectLaunchables(rootPath, depth = 0) {
 
 function listInstalledApps() {
   const seenPaths = new Set();
+  const config = readScanConfig();
+  const approved = new Set(config?.approvedApps || []);
 
   return getScanLocations()
     .flatMap((location) => collectLaunchables(location))
     .filter((entry) => {
-      if (seenPaths.has(entry.path)) {
-        return false;
-      }
-
+      if (seenPaths.has(entry.path)) return false;
       seenPaths.add(entry.path);
-      return true;
+      return approved.has(entry.path);
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function listPendingApps() {
+  const seenPaths = new Set();
+  const config = readScanConfig();
+  const approved = new Set(config?.approvedApps || []);
+  const rejected = new Set(config?.rejectedApps || []);
+
+  return getScanLocations()
+    .flatMap((location) => collectLaunchables(location))
+    .filter((entry) => {
+      if (seenPaths.has(entry.path)) return false;
+      seenPaths.add(entry.path);
+      return !approved.has(entry.path) && !rejected.has(entry.path);
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function listRejectedApps() {
+  const seenPaths = new Set();
+  const config = readScanConfig();
+  const rejected = new Set(config?.rejectedApps || []);
+
+  return getScanLocations()
+    .flatMap((location) => collectLaunchables(location))
+    .filter((entry) => {
+      if (seenPaths.has(entry.path)) return false;
+      seenPaths.add(entry.path);
+      return rejected.has(entry.path);
     })
     .sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -260,33 +328,53 @@ function createGestureWindow() {
   });
 
   gestureWindow.setAlwaysOnTop(true, 'screen-saver');
+  gestureWindow.setIgnoreMouseEvents(true, { forward: true });
 
   const gestureHtml = `<!DOCTYPE html>
 <html><head><style>
 *{margin:0;padding:0}
-html,body{width:100%;height:100%;overflow:hidden;background:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:transparent;-webkit-app-region:no-drag}
 #indicator{position:fixed;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,rgba(120,240,208,0.8),rgba(120,240,208,0.2));opacity:0;transition:opacity 0.15s}
 </style></head><body>
 <div id="indicator"></div>
 <script>
 const {ipcRenderer}=require('electron');
-let tracking=false,startX=0;
-const THRESHOLD=60;
+let tracking=false,startX=0,startY=0,swiping=false;
+const THRESHOLD=80;
+const MIN_DX_TO_TRACK=10;
 const ind=document.getElementById('indicator');
+
+document.addEventListener('pointerenter',()=>{
+  ipcRenderer.send('gesture:set-clickthrough',false);
+});
+document.addEventListener('pointerleave',()=>{
+  if(!swiping){ipcRenderer.send('gesture:set-clickthrough',true);}
+});
 document.addEventListener('pointerdown',e=>{
-  tracking=true;startX=e.screenX;
-  ind.style.opacity='0.6';
-  e.target.setPointerCapture(e.pointerId);
+  tracking=true;swiping=false;startX=e.screenX;startY=e.screenY;
 });
 document.addEventListener('pointermove',e=>{
   if(!tracking)return;
-  if(e.screenX-startX>THRESHOLD){
-    tracking=false;ind.style.opacity='0';
+  const dx=e.screenX-startX;
+  const dy=Math.abs(e.screenY-startY);
+  if(!swiping&&dx>MIN_DX_TO_TRACK&&dx>dy){
+    swiping=true;
+    e.target.setPointerCapture(e.pointerId);
+    ind.style.opacity='0.6';
+  }
+  if(swiping&&dx>THRESHOLD){
+    tracking=false;swiping=false;ind.style.opacity='0';
     ipcRenderer.send('gesture:back');
+    ipcRenderer.send('gesture:set-clickthrough',true);
   }
 });
-document.addEventListener('pointerup',()=>{tracking=false;ind.style.opacity='0';});
-document.addEventListener('pointercancel',()=>{tracking=false;ind.style.opacity='0';});
+document.addEventListener('pointerup',e=>{
+  if(!swiping){
+    ipcRenderer.send('gesture:set-clickthrough',true);
+  }
+  tracking=false;swiping=false;ind.style.opacity='0';
+});
+document.addEventListener('pointercancel',()=>{tracking=false;swiping=false;ind.style.opacity='0';});
 </script></body></html>`;
 
   gestureWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(gestureHtml)}`);
@@ -336,7 +424,7 @@ ipcMain.handle('launcher:list-apps', async () => {
     return [];
   }
 
-  return listInstalledApps();
+  return attachIcons(listInstalledApps());
 });
 
 ipcMain.handle('launcher:launch-app', async (_event, targetPath) => {
@@ -361,6 +449,48 @@ ipcMain.handle('launcher:save-scan-config', async (_event, config) => {
 
 ipcMain.handle('launcher:get-suggested-folders', async () => getSuggestedScanFolders());
 
+ipcMain.handle('launcher:list-pending-apps', async () => {
+  if (process.platform !== 'win32') return [];
+  return attachIcons(listPendingApps());
+});
+
+ipcMain.handle('launcher:list-rejected-apps', async () => {
+  if (process.platform !== 'win32') return [];
+  return attachIcons(listRejectedApps());
+});
+
+ipcMain.handle('launcher:approve-apps', async (_event, paths) => {
+  const config = readScanConfig() || { scanFolders: [], setupComplete: true, approvedApps: [], rejectedApps: [] };
+  const approved = new Set(config.approvedApps || []);
+  for (const p of paths) approved.add(p);
+  config.approvedApps = [...approved];
+  writeScanConfig(config);
+});
+
+ipcMain.handle('launcher:reject-apps', async (_event, paths) => {
+  const config = readScanConfig() || { scanFolders: [], setupComplete: true, approvedApps: [], rejectedApps: [] };
+  const rejected = new Set(config.rejectedApps || []);
+  for (const p of paths) rejected.add(p);
+  config.rejectedApps = [...rejected];
+  writeScanConfig(config);
+});
+
+ipcMain.handle('launcher:remove-app', async (_event, appPath) => {
+  const config = readScanConfig();
+  if (!config) return;
+  config.approvedApps = (config.approvedApps || []).filter((p) => p !== appPath);
+  if (!config.rejectedApps) config.rejectedApps = [];
+  config.rejectedApps.push(appPath);
+  writeScanConfig(config);
+});
+
+ipcMain.handle('launcher:unreject-app', async (_event, appPath) => {
+  const config = readScanConfig();
+  if (!config) return;
+  config.rejectedApps = (config.rejectedApps || []).filter((p) => p !== appPath);
+  writeScanConfig(config);
+});
+
 ipcMain.handle('launcher:pick-folder', async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -373,6 +503,12 @@ ipcMain.handle('launcher:pick-folder', async () => {
 
 ipcMain.on('gesture:back', () => {
   sendBackKey();
+});
+
+ipcMain.on('gesture:set-clickthrough', (_event, enabled) => {
+  if (gestureWindow && !gestureWindow.isDestroyed()) {
+    gestureWindow.setIgnoreMouseEvents(enabled, { forward: true });
+  }
 });
 
 app.whenReady().then(async () => {

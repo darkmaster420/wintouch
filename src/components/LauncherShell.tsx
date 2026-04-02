@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { LaunchResult, LaunchableApp, ScanConfig } from "@/lib/types";
+import type { LaunchResult, LaunchableApp, ScanConfig, SuggestedFolder } from "@/lib/types";
 import { SetupScreen } from "./SetupScreen";
+import { ApprovalScreen } from "./ApprovalScreen";
+import { SettingsScreen } from "./SettingsScreen";
 
 const PIN_STORAGE_KEY = "wintouch.pinned-apps";
 
@@ -13,11 +15,19 @@ declare global {
       launchApp: (targetPath: string) => Promise<LaunchResult>;
       getScanConfig: () => Promise<ScanConfig | null>;
       saveScanConfig: (config: ScanConfig) => Promise<void>;
-      getSuggestedFolders: () => Promise<unknown[]>;
+      getSuggestedFolders: () => Promise<SuggestedFolder[]>;
       pickFolder: () => Promise<string | null>;
+      listPendingApps: () => Promise<LaunchableApp[]>;
+      listRejectedApps: () => Promise<LaunchableApp[]>;
+      approveApps: (paths: string[]) => Promise<void>;
+      rejectApps: (paths: string[]) => Promise<void>;
+      removeApp: (appPath: string) => Promise<void>;
+      unrejectApp: (appPath: string) => Promise<void>;
     };
   }
 }
+
+type Screen = "loading" | "setup" | "approval" | "launcher" | "settings";
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -38,6 +48,13 @@ function initialsFor(name: string) {
     .join("");
 }
 
+function AppIcon({ app }: { app: LaunchableApp }) {
+  if (app.icon) {
+    return <img className="app-icon" src={app.icon} alt={app.name} draggable={false} />;
+  }
+  return <span className="app-mark">{initialsFor(app.name)}</span>;
+}
+
 export function LauncherShell() {
   const [apps, setApps] = useState<LaunchableApp[]>([]);
   const [query, setQuery] = useState("");
@@ -45,7 +62,8 @@ export function LauncherShell() {
   const [isLoading, setIsLoading] = useState(true);
   const [launchingId, setLaunchingId] = useState<string | null>(null);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
-  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+  const [screen, setScreen] = useState<Screen>("loading");
+  const [pendingApps, setPendingApps] = useState<LaunchableApp[]>([]);
   const now = useClock();
 
   useEffect(() => {
@@ -83,18 +101,29 @@ export function LauncherShell() {
     }
   }
 
+  async function checkPendingAndLoad() {
+    if (!window.wintouch) return;
+    const pending = await window.wintouch.listPendingApps();
+    if (pending.length > 0) {
+      setPendingApps(pending);
+      setScreen("approval");
+    } else {
+      setScreen("launcher");
+      void loadApps();
+    }
+  }
+
   useEffect(() => {
     if (!window.wintouch) {
-      setNeedsSetup(false);
+      setScreen("launcher");
       return;
     }
 
     window.wintouch.getScanConfig().then((config) => {
       if (!config || !config.setupComplete) {
-        setNeedsSetup(true);
+        setScreen("setup");
       } else {
-        setNeedsSetup(false);
-        void loadApps();
+        void checkPendingAndLoad();
       }
     });
   }, []);
@@ -154,16 +183,37 @@ export function LauncherShell() {
     day: "numeric",
   });
 
-  if (needsSetup === null) {
+  if (screen === "loading") {
     return <main className="shell"><p className="status">Loading...</p></main>;
   }
 
-  if (needsSetup) {
+  if (screen === "setup") {
     return (
       <SetupScreen
         onComplete={() => {
-          setNeedsSetup(false);
+          void checkPendingAndLoad();
+        }}
+      />
+    );
+  }
+
+  if (screen === "approval") {
+    return (
+      <ApprovalScreen
+        pending={pendingApps}
+        onDone={() => {
+          setScreen("launcher");
           void loadApps();
+        }}
+      />
+    );
+  }
+
+  if (screen === "settings") {
+    return (
+      <SettingsScreen
+        onClose={() => {
+          void checkPendingAndLoad();
         }}
       />
     );
@@ -185,9 +235,14 @@ export function LauncherShell() {
           <div className="clock">{formattedTime}</div>
           <div className="date">{formattedDate}</div>
         </div>
-        <button className="action-button" type="button" onClick={() => void loadApps()}>
-          Refresh library
-        </button>
+        <div className="toolbar-actions">
+          <button className="action-button" type="button" onClick={() => void loadApps()}>
+            Refresh
+          </button>
+          <button className="action-button" type="button" onClick={() => setScreen("settings")}>
+            Settings
+          </button>
+        </div>
       </section>
 
       {error ? <p className="status error">{error}</p> : null}
@@ -208,7 +263,7 @@ export function LauncherShell() {
                 onClick={() => void handleLaunch(app)}
                 disabled={launchingId === app.id}
               >
-                <span className="app-mark">{initialsFor(app.name)}</span>
+                <AppIcon app={app} />
                 <span className="app-name">{app.name}</span>
                 <span className="app-path">{app.type.toUpperCase()}</span>
                 <span className="app-action" onClick={(event) => {
@@ -242,7 +297,7 @@ export function LauncherShell() {
                 onClick={() => void handleLaunch(app)}
                 disabled={launchingId === app.id}
               >
-                <span className="app-mark">{initialsFor(app.name)}</span>
+                <AppIcon app={app} />
                 <span className="app-name">{app.name}</span>
                 <span className="app-path">{app.path}</span>
               </button>

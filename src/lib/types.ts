@@ -4,6 +4,7 @@ export type LaunchableApp = {
   path: string;
   source: string;
   type: string;
+  icon?: string;
 };
 
 export type LaunchResult = {
@@ -14,6 +15,8 @@ export type LaunchResult = {
 export type ScanConfig = {
   scanFolders: string[];
   setupComplete: boolean;
+  approvedApps: string[];
+  rejectedApps: string[];
 };
 
 export type SuggestedFolder = {

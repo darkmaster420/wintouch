@@ -196,6 +196,13 @@ input {
   border: none;
 }
 
+.app-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  object-fit: cover;
+}
+
 .app-mark {
   width: 64px;
   height: 64px;
@@ -399,4 +406,144 @@ input {
 .action-button.primary:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ---------- Approval screen ---------- */
+
+.approval-card {
+  max-width: 640px;
+}
+
+.approval-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+}
+
+.approval-progress-bar {
+  height: 100%;
+  background: var(--hot);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.approval-count {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 1.25rem;
+}
+
+.approval-item {
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel-strong);
+  margin-bottom: 1.25rem;
+}
+
+.approval-item-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  object-fit: cover;
+  margin-bottom: 0.75rem;
+}
+
+.approval-item-info {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.approval-item-name {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.approval-item-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.reject-btn {
+  background: rgba(255, 136, 136, 0.1);
+  border-color: rgba(255, 136, 136, 0.25);
+  color: var(--danger);
+}
+
+/* ---------- Settings screen ---------- */
+
+.settings-card {
+  max-width: 720px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.settings-header h1 {
+  margin: 0;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.settings-tab {
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.settings-tab.active {
+  background: rgba(120, 240, 208, 0.1);
+  border-color: var(--hot);
+  color: var(--hot);
+}
+
+.settings-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.settings-item {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(183, 213, 255, 0.08);
+  border-radius: 16px;
+  background: var(--panel-strong);
+}
+
+.settings-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.settings-item-info {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
 }
