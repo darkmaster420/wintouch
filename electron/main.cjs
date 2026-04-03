@@ -12,6 +12,14 @@ let tray = null;
 let gestureWindow = null;
 let isQuitting = false;
 
+const SCHEME = 'app';
+
+if (!isDev) {
+  protocol.registerSchemesAsPrivileged([
+    { scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  ]);
+}
+
 const EXCLUDED_SEGMENTS = new Set([
   'Administrative Tools',
   'Accessibility',
@@ -26,6 +34,17 @@ const EXCLUDED_SEGMENTS = new Set([
 
 function hashPath(filePath) {
   return createHash('sha1').update(filePath).digest('hex');
+}
+
+function mimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const types = {
+    '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
+    '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
+    '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff',
+    '.woff2': 'font/woff2', '.txt': 'text/plain',
+  };
+  return types[ext] || 'application/octet-stream';
 }
 
 /* ---------- icon extraction ---------- */
@@ -378,8 +397,7 @@ function createWindow() {
     mainWindow.loadURL(`http://localhost:${port}`);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    const exportDir = path.join(app.getAppPath(), 'out');
-    mainWindow.loadFile(path.join(exportDir, 'index.html'));
+    mainWindow.loadURL(`${SCHEME}://./index.html`);
   }
 
   mainWindow.on('close', (event) => {
@@ -489,6 +507,22 @@ ipcMain.on('gesture:set-clickthrough', (_event, enabled) => {
 app.whenReady().then(async () => {
   if (isDev) {
     await startNextDevServer();
+  } else {
+    const exportDir = path.join(app.getAppPath(), 'out');
+
+    protocol.handle(SCHEME, (request) => {
+      const url = new URL(request.url);
+      let filePath = path.join(exportDir, decodeURIComponent(url.pathname));
+
+      // Serve index.html for directory requests
+      if (!path.extname(filePath)) {
+        filePath = path.join(filePath, 'index.html');
+      }
+
+      return new Response(fs.readFileSync(filePath), {
+        headers: { 'Content-Type': mimeType(filePath) },
+      });
+    });
   }
 
   createWindow();
