@@ -9,119 +9,97 @@ type Props = {
 };
 
 export function ApprovalScreen({ pending, onDone }: Props) {
-  const [accepted, setAccepted] = useState<Set<string>>(new Set());
-  const [rejected, setRejected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(pending.map((a) => a.path)));
   const [saving, setSaving] = useState(false);
+  const [filter, setFilter] = useState("");
 
-  const remaining = pending.filter(
-    (app) => !accepted.has(app.path) && !rejected.has(app.path)
-  );
-  const current = remaining[0] ?? null;
-  const progress = pending.length - remaining.length;
+  const filtered = filter.trim()
+    ? pending.filter((a) => a.name.toLowerCase().includes(filter.trim().toLowerCase()))
+    : pending;
 
-  function accept(appPath: string) {
-    setAccepted((prev) => new Set([...prev, appPath]));
-  }
-
-  function reject(appPath: string) {
-    setRejected((prev) => new Set([...prev, appPath]));
-  }
-
-  function acceptAll() {
-    setAccepted((prev) => {
+  function toggle(appPath: string) {
+    setSelected((prev) => {
       const next = new Set(prev);
-      for (const app of remaining) next.add(app.path);
+      if (next.has(appPath)) next.delete(appPath);
+      else next.add(appPath);
       return next;
     });
   }
 
-  function rejectAll() {
-    setRejected((prev) => {
-      const next = new Set(prev);
-      for (const app of remaining) next.add(app.path);
-      return next;
-    });
+  function selectAll() {
+    setSelected(new Set(pending.map((a) => a.path)));
+  }
+
+  function selectNone() {
+    setSelected(new Set());
   }
 
   async function finish() {
     setSaving(true);
-    const toApprove = [...accepted];
-    const toReject = [...rejected];
+    const toApprove = pending.filter((a) => selected.has(a.path)).map((a) => a.path);
+    const toReject = pending.filter((a) => !selected.has(a.path)).map((a) => a.path);
     if (toApprove.length > 0) await window.wintouch?.approveApps(toApprove);
     if (toReject.length > 0) await window.wintouch?.rejectApps(toReject);
     onDone();
   }
 
-  // Auto-finish when all items are decided
-  const allDecided = remaining.length === 0 && pending.length > 0;
-
   return (
     <main className="setup-shell">
       <section className="setup-card approval-card">
-        <h1>Review found apps</h1>
+        <h1>Choose your apps</h1>
         <p className="setup-subtitle">
-          {pending.length} executables found — approve the ones you want in your library.
+          {pending.length} executables found — select the ones you want in your library.
         </p>
 
-        <div className="approval-progress">
-          <div
-            className="approval-progress-bar"
-            style={{ width: `${pending.length > 0 ? (progress / pending.length) * 100 : 0}%` }}
-          />
-        </div>
         <p className="approval-count">
-          {progress} of {pending.length} reviewed · {accepted.size} added · {rejected.size} skipped
+          {selected.size} of {pending.length} selected
         </p>
 
-        {current && !allDecided ? (
-          <div className="approval-item">
-            {current.icon && (
-              <img className="approval-item-icon" src={current.icon} alt={current.name} draggable={false} />
-            )}
-            <div className="approval-item-info">
-              <span className="approval-item-name">{current.name}</span>
-              <span className="folder-path">{current.path}</span>
-            </div>
-            <div className="approval-item-actions">
-              <button
-                type="button"
-                className="action-button reject-btn"
-                onClick={() => reject(current.path)}
-              >
-                Skip
-              </button>
-              <button
-                type="button"
-                className="action-button primary"
-                onClick={() => accept(current.path)}
-              >
-                Add to library
-              </button>
-            </div>
-          </div>
-        ) : null}
+        <div className="approval-toolbar">
+          <input
+            className="approval-filter"
+            type="text"
+            placeholder="Filter..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            inputMode="search"
+          />
+          <button type="button" className="action-button" onClick={selectAll}>All</button>
+          <button type="button" className="action-button" onClick={selectNone}>None</button>
+        </div>
+
+        <div className="approval-list">
+          {filtered.map((app) => (
+            <label key={app.id} className={`approval-row${selected.has(app.path) ? " checked" : ""}`}>
+              <input
+                type="checkbox"
+                checked={selected.has(app.path)}
+                onChange={() => toggle(app.path)}
+              />
+              {app.icon ? (
+                <img className="approval-row-icon" src={app.icon} alt={app.name} draggable={false} />
+              ) : (
+                <span className="approval-row-mark">
+                  {app.name.split(/\s+/).slice(0, 2).map((s) => s[0]?.toUpperCase() ?? "").join("")}
+                </span>
+              )}
+              <span className="approval-row-info">
+                <span className="approval-row-name">{app.name}</span>
+                <span className="folder-path">{app.path}</span>
+              </span>
+            </label>
+          ))}
+        </div>
 
         <div className="setup-actions">
-          {!allDecided && remaining.length > 0 && (
-            <>
-              <button type="button" className="action-button" onClick={rejectAll}>
-                Skip all remaining
-              </button>
-              <button type="button" className="action-button primary" onClick={acceptAll}>
-                Add all remaining
-              </button>
-            </>
-          )}
-          {allDecided && (
-            <button
-              type="button"
-              className="action-button primary"
-              onClick={() => void finish()}
-              disabled={saving}
-            >
-              {saving ? "Saving..." : `Done — open launcher`}
-            </button>
-          )}
+          <button
+            type="button"
+            className="action-button primary"
+            onClick={() => void finish()}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : `Add ${selected.size} app${selected.size !== 1 ? "s" : ""} to library`}
+          </button>
         </div>
       </section>
     </main>

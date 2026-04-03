@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, screen, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, screen, nativeImage, protocol } = require('electron');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -26,10 +26,6 @@ const EXCLUDED_SEGMENTS = new Set([
 
 function hashPath(filePath) {
   return createHash('sha1').update(filePath).digest('hex');
-}
-
-function getNodeCommand() {
-  return process.platform === 'win32' ? 'node.exe' : 'node';
 }
 
 /* ---------- icon extraction ---------- */
@@ -145,7 +141,6 @@ function collectLaunchables(rootPath, depth = 0) {
   }
 
   const entries = [];
-  let hasExecutableInDirectory = false;
 
   for (const dirent of dirents) {
     const fullPath = path.join(rootPath, dirent.name);
@@ -163,16 +158,10 @@ function collectLaunchables(rootPath, depth = 0) {
       continue;
     }
 
-    if (hasExecutableInDirectory) {
-      continue;
-    }
-
     const name = path.basename(dirent.name, path.extname(dirent.name)).replace(/[-_]+/g, ' ').trim();
     if (!name) {
       continue;
     }
-
-    hasExecutableInDirectory = true;
 
     entries.push({
       id: hashPath(fullPath),
@@ -232,33 +221,18 @@ function listRejectedApps() {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function startNextServer() {
+function startNextDevServer() {
   return new Promise((resolve, reject) => {
-    if (isDev) {
-      nextServer = spawn('npm', ['run', 'dev:next'], {
-        shell: true,
-        stdio: 'inherit',
-        env: {
-          ...process.env,
-          ELECTRON: 'true',
-        },
-      });
-    } else {
-      const serverPath = path.join(app.getAppPath(), '.next', 'standalone', 'server.js');
-
-      nextServer = spawn(getNodeCommand(), [serverPath], {
-        stdio: 'inherit',
-        env: {
-          ...process.env,
-          ELECTRON: 'true',
-          HOSTNAME: '127.0.0.1',
-          PORT: String(port),
-        },
-      });
-    }
-
+    nextServer = spawn('npm', ['run', 'dev:next'], {
+      shell: true,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        ELECTRON: 'true',
+      },
+    });
     nextServer.on('error', reject);
-    setTimeout(resolve, isDev ? 5000 : 2000);
+    setTimeout(resolve, 5000);
   });
 }
 
@@ -404,7 +378,8 @@ function createWindow() {
     mainWindow.loadURL(`http://localhost:${port}`);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadURL(`http://localhost:${port}`);
+    const exportDir = path.join(app.getAppPath(), 'out');
+    mainWindow.loadFile(path.join(exportDir, 'index.html'));
   }
 
   mainWindow.on('close', (event) => {
@@ -512,7 +487,9 @@ ipcMain.on('gesture:set-clickthrough', (_event, enabled) => {
 });
 
 app.whenReady().then(async () => {
-  await startNextServer();
+  if (isDev) {
+    await startNextDevServer();
+  }
 
   createWindow();
   createTray();
