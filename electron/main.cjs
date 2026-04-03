@@ -319,6 +319,7 @@ function createGestureWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
+      sandbox: false,
     },
   });
 
