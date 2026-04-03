@@ -77,10 +77,12 @@ async function attachIcons(entries) {
   const results = [];
   for (const entry of entries) {
     const iconPath = await extractIcon(entry.path);
-    results.push({
-      ...entry,
-      icon: iconPath ? `file://${iconPath.replace(/\\/g, '/')}` : undefined,
-    });
+    if (iconPath) {
+      const filename = path.basename(iconPath);
+      results.push({ ...entry, icon: isDev ? `file://${iconPath.replace(/\\/g, '/')}` : `${SCHEME}://icon/${filename}` });
+    } else {
+      results.push(entry);
+    }
   }
   return results;
 }
@@ -323,6 +325,7 @@ function createGestureWindow() {
   gestureWindow.setAlwaysOnTop(true, 'screen-saver');
   gestureWindow.setIgnoreMouseEvents(true, { forward: true });
 
+  const gestureHtmlPath = path.join(app.getPath('userData'), 'gesture.html');
   const gestureHtml = `<!DOCTYPE html>
 <html><head><style>
 *{margin:0;padding:0}
@@ -370,7 +373,8 @@ document.addEventListener('pointerup',e=>{
 document.addEventListener('pointercancel',()=>{tracking=false;swiping=false;ind.style.opacity='0';});
 </script></body></html>`;
 
-  gestureWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(gestureHtml)}`);
+  fs.writeFileSync(gestureHtmlPath, gestureHtml, 'utf-8');
+  gestureWindow.loadFile(gestureHtmlPath);
 }
 
 /* ---------- main window ---------- */
@@ -512,7 +516,20 @@ app.whenReady().then(async () => {
 
     protocol.handle(SCHEME, (request) => {
       const url = new URL(request.url);
-      let filePath = path.join(exportDir, decodeURIComponent(url.pathname));
+      const pathname = decodeURIComponent(url.pathname);
+
+      // Serve icons from userData cache
+      if (url.host === 'icon') {
+        const iconFile = path.join(getIconCacheDir(), path.basename(pathname));
+        if (fs.existsSync(iconFile)) {
+          return new Response(fs.readFileSync(iconFile), {
+            headers: { 'Content-Type': 'image/png' },
+          });
+        }
+        return new Response('Not found', { status: 404 });
+      }
+
+      let filePath = path.join(exportDir, pathname);
 
       // Serve index.html for directory requests
       if (!path.extname(filePath)) {
