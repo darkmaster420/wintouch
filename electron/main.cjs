@@ -9,7 +9,7 @@ const port = Number(process.env.PORT || 3020);
 let mainWindow;
 let nextServer;
 let tray = null;
-let gestureWindow = null;
+let gestureProcess = null;
 let isQuitting = false;
 
 const SCHEME = 'app';
@@ -266,7 +266,7 @@ function stopNextServer() {
 /* ---------- system tray ---------- */
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'assets', 'tray-icon.png');
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
   const icon = fs.existsSync(iconPath)
     ? nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
     : nativeImage.createEmpty();
@@ -286,101 +286,47 @@ function createTray() {
 
 /* ---------- left-edge swipe gesture ---------- */
 
-function sendBackKey() {
+function startGestureHelper() {
   if (process.platform !== 'win32') return;
-  const script = [
-    "Add-Type -MemberDefinition '",
-    '[DllImport(\"user32.dll\")]public static extern void keybd_event(byte bVk,byte bScan,uint dwFlags,UIntPtr dwExtraInfo);',
-    "' -Name U -Namespace W;",
-    '[W.U]::keybd_event(0x12,0,0,[UIntPtr]::Zero);',
-    '[W.U]::keybd_event(0x25,0,0,[UIntPtr]::Zero);',
-    '[W.U]::keybd_event(0x25,0,2,[UIntPtr]::Zero);',
-    '[W.U]::keybd_event(0x12,0,2,[UIntPtr]::Zero)',
-  ].join('');
-  exec(`powershell -NoProfile -Command "${script}"`, { windowsHide: true });
-}
 
-function createGestureWindow() {
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { height } = primaryDisplay.workAreaSize;
+  const exeName = 'gesture.exe';
+  const exePath = isDev
+    ? path.join(__dirname, '..', 'native', exeName)
+    : path.join(process.resourcesPath, exeName);
 
-  gestureWindow = new BrowserWindow({
-    x: 0,
-    y: 0,
-    width: 20,
-    height,
-    transparent: true,
-    frame: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    focusable: false,
-    resizable: false,
-    hasShadow: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      sandbox: false,
-    },
+  if (!fs.existsSync(exePath)) {
+    console.warn('[gesture] helper not found at', exePath);
+    return;
+  }
+
+  gestureProcess = spawn(exePath, [], {
+    detached: false,
+    stdio: 'ignore',
+    windowsHide: true,
   });
 
-  gestureWindow.setAlwaysOnTop(true, 'screen-saver');
-  gestureWindow.setIgnoreMouseEvents(true, { forward: true });
+  gestureProcess.on('error', (err) => {
+    console.error('[gesture] failed to start helper:', err.message);
+    gestureProcess = null;
+  });
 
-  const gestureHtmlPath = path.join(app.getPath('userData'), 'gesture.html');
-  const gestureHtml = `<!DOCTYPE html>
-<html><head><style>
-*{margin:0;padding:0}
-html,body{width:100%;height:100%;overflow:hidden;background:transparent;-webkit-app-region:no-drag}
-#indicator{position:fixed;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,rgba(120,240,208,0.8),rgba(120,240,208,0.2));opacity:0;transition:opacity 0.15s}
-</style></head><body>
-<div id="indicator"></div>
-<script>
-const {ipcRenderer}=require('electron');
-let tracking=false,startX=0,startY=0,swiping=false;
-const THRESHOLD=80;
-const MIN_DX_TO_TRACK=10;
-const ind=document.getElementById('indicator');
+  gestureProcess.on('exit', (code) => {
+    console.log('[gesture] helper exited with code', code);
+    gestureProcess = null;
+  });
+}
 
-document.addEventListener('pointerenter',()=>{
-  ipcRenderer.send('gesture:set-clickthrough',false);
-});
-document.addEventListener('pointerleave',()=>{
-  if(!swiping){ipcRenderer.send('gesture:set-clickthrough',true);}
-});
-document.addEventListener('pointerdown',e=>{
-  tracking=true;swiping=false;startX=e.screenX;startY=e.screenY;
-});
-document.addEventListener('pointermove',e=>{
-  if(!tracking)return;
-  const dx=e.screenX-startX;
-  const dy=Math.abs(e.screenY-startY);
-  if(!swiping&&dx>MIN_DX_TO_TRACK&&dx>dy){
-    swiping=true;
-    e.target.setPointerCapture(e.pointerId);
-    ind.style.opacity='0.6';
+function stopGestureHelper() {
+  if (gestureProcess) {
+    gestureProcess.kill();
+    gestureProcess = null;
   }
-  if(swiping&&dx>THRESHOLD){
-    tracking=false;swiping=false;ind.style.opacity='0';
-    ipcRenderer.send('gesture:back');
-    ipcRenderer.send('gesture:set-clickthrough',true);
-  }
-});
-document.addEventListener('pointerup',e=>{
-  if(!swiping){
-    ipcRenderer.send('gesture:set-clickthrough',true);
-  }
-  tracking=false;swiping=false;ind.style.opacity='0';
-});
-document.addEventListener('pointercancel',()=>{tracking=false;swiping=false;ind.style.opacity='0';});
-</script></body></html>`;
-
-  fs.writeFileSync(gestureHtmlPath, gestureHtml, 'utf-8');
-  gestureWindow.loadFile(gestureHtmlPath);
 }
 
 /* ---------- main window ---------- */
 
 function createWindow() {
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -388,6 +334,7 @@ function createWindow() {
     minHeight: 720,
     autoHideMenuBar: true,
     backgroundColor: '#0a1020',
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -499,15 +446,7 @@ ipcMain.handle('launcher:pick-folder', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.on('gesture:back', () => {
-  sendBackKey();
-});
 
-ipcMain.on('gesture:set-clickthrough', (_event, enabled) => {
-  if (gestureWindow && !gestureWindow.isDestroyed()) {
-    gestureWindow.setIgnoreMouseEvents(enabled, { forward: true });
-  }
-});
 
 app.whenReady().then(async () => {
   if (isDev) {
@@ -545,7 +484,7 @@ app.whenReady().then(async () => {
 
   createWindow();
   createTray();
-  createGestureWindow();
+  startGestureHelper();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -564,8 +503,5 @@ app.on('before-quit', () => {
   isQuitting = true;
   stopNextServer();
 
-  if (gestureWindow && !gestureWindow.isDestroyed()) {
-    gestureWindow.destroy();
-    gestureWindow = null;
-  }
+  stopGestureHelper();
 });

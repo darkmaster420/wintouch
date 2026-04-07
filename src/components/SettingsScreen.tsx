@@ -5,11 +5,13 @@ import type { LaunchableApp, ScanConfig, SuggestedFolder } from "@/lib/types";
 
 type Props = {
   onClose: () => void;
+  iconSize: number;
+  onIconSizeChange: (size: number) => void;
 };
 
-type Tab = "library" | "folders" | "skipped";
+type Tab = "library" | "folders" | "skipped" | "appearance";
 
-export function SettingsScreen({ onClose }: Props) {
+export function SettingsScreen({ onClose, iconSize, onIconSizeChange }: Props) {
   const [tab, setTab] = useState<Tab>("library");
   const [apps, setApps] = useState<LaunchableApp[]>([]);
   const [rejectedApps, setRejectedApps] = useState<LaunchableApp[]>([]);
@@ -115,6 +117,13 @@ export function SettingsScreen({ onClose }: Props) {
             onClick={() => setTab("skipped")}
           >
             Skipped ({rejectedApps.length})
+          </button>
+          <button
+            type="button"
+            className={`settings-tab ${tab === "appearance" ? "active" : ""}`}
+            onClick={() => setTab("appearance")}
+          >
+            Appearance
           </button>
         </div>
 
@@ -229,6 +238,26 @@ export function SettingsScreen({ onClose }: Props) {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {tab === "appearance" && (
+          <div className="settings-list">
+            <div className="settings-item">
+              <span className="settings-item-info">
+                <span className="folder-label">Icon size</span>
+                <span className="folder-path">{iconSize}px</span>
+              </span>
+              <input
+                type="range"
+                className="size-slider"
+                min={60}
+                max={200}
+                step={5}
+                value={iconSize}
+                onChange={(e) => onIconSizeChange(Number(e.target.value))}
+              />
+            </div>
           </div>
         )}
       </section>

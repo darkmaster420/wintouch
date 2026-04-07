@@ -7,6 +7,8 @@ import { ApprovalScreen } from "./ApprovalScreen";
 import { SettingsScreen } from "./SettingsScreen";
 
 const PIN_STORAGE_KEY = "wintouch.pinned-apps";
+const ICON_SIZE_KEY = "wintouch.icon-size";
+const DEFAULT_ICON_SIZE = 100;
 
 declare global {
   interface Window {
@@ -62,6 +64,7 @@ export function LauncherShell() {
   const [isLoading, setIsLoading] = useState(true);
   const [launchingId, setLaunchingId] = useState<string | null>(null);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [iconSize, setIconSize] = useState(DEFAULT_ICON_SIZE);
   const [screen, setScreen] = useState<Screen>("loading");
   const [pendingApps, setPendingApps] = useState<LaunchableApp[]>([]);
   const now = useClock();
@@ -75,6 +78,8 @@ export function LauncherShell() {
         window.localStorage.removeItem(PIN_STORAGE_KEY);
       }
     }
+    const savedSize = window.localStorage.getItem(ICON_SIZE_KEY);
+    if (savedSize) setIconSize(Number(savedSize) || DEFAULT_ICON_SIZE);
   }, []);
 
   useEffect(() => {
@@ -140,7 +145,7 @@ export function LauncherShell() {
   }, [apps, query]);
 
   const pinnedApps = filteredApps.filter((app) => pinnedIds.includes(app.id));
-  const suggestedApps = filteredApps.filter((app) => !pinnedIds.includes(app.id)).slice(0, 18);
+  const suggestedApps = filteredApps.filter((app) => !pinnedIds.includes(app.id));
 
   async function handleLaunch(app: LaunchableApp) {
     if (!window.wintouch) {
@@ -168,7 +173,7 @@ export function LauncherShell() {
         return current.filter((item) => item !== appId);
       }
 
-      return [appId, ...current].slice(0, 12);
+      return [appId, ...current];
     });
   }
 
@@ -215,19 +220,24 @@ export function LauncherShell() {
         onClose={() => {
           void checkPendingAndLoad();
         }}
+        iconSize={iconSize}
+        onIconSizeChange={(size) => {
+          setIconSize(size);
+          window.localStorage.setItem(ICON_SIZE_KEY, String(size));
+        }}
       />
     );
   }
 
   return (
-    <main className="shell">
+    <main className="shell" style={{ "--tile-size": `${iconSize}px` } as React.CSSProperties}>
       <section className="toolbar">
         <label className="search-field">
-          <span>Search apps</span>
+          <span>⌕</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Type an app, game, or shortcut"
+            placeholder="Search apps..."
             inputMode="search"
           />
         </label>
@@ -237,25 +247,25 @@ export function LauncherShell() {
         </div>
         <div className="toolbar-actions">
           <button className="action-button" type="button" onClick={() => void loadApps()}>
-            Refresh
+            ↻ Refresh
           </button>
           <button className="action-button" type="button" onClick={() => setScreen("settings")}>
-            Settings
+            ⚙ Settings
           </button>
         </div>
       </section>
 
       {error ? <p className="status error">{error}</p> : null}
-      {isLoading ? <p className="status">Scanning Windows shortcuts and desktop apps...</p> : null}
+      {isLoading ? <p className="status">Scanning…</p> : null}
 
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Pinned</h2>
-          <span>{pinnedApps.length} ready</span>
-        </div>
-        <div className="grid featured-grid">
-          {pinnedApps.length > 0 ? (
-            pinnedApps.map((app) => (
+      {pinnedApps.length > 0 && (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Pinned</h2>
+            <span>{pinnedApps.length}</span>
+          </div>
+          <div className="grid featured-grid">
+            {pinnedApps.map((app) => (
               <button
                 key={app.id}
                 className="app-tile featured"
@@ -265,7 +275,7 @@ export function LauncherShell() {
               >
                 <AppIcon app={app} />
                 <span className="app-name">{app.name}</span>
-                <span className="app-path">{app.type.toUpperCase()}</span>
+                <span className="app-type">{app.type}</span>
                 <span className="app-action" onClick={(event) => {
                   event.stopPropagation();
                   togglePin(app.id);
@@ -273,20 +283,15 @@ export function LauncherShell() {
                   Unpin
                 </span>
               </button>
-            ))
-          ) : (
-            <article className="empty-card">
-              <h3>No pinned apps yet</h3>
-              <p>Pin the apps you open most so they stay on the first screen.</p>
-            </article>
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="panel">
         <div className="panel-header">
           <h2>Library</h2>
-          <span>{filteredApps.length} results</span>
+          <span>{suggestedApps.length}</span>
         </div>
         <div className="grid library-grid">
           {suggestedApps.map((app) => (

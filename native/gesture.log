@@ -1,0 +1,14 @@
+gesture.exe started
+screen height=1080
+window created hwnd=0000000000410328
+POINTER_DOWN  x=0 y=500  fg=00000000000503F4
+SWIPING started dx=15
+THRESHOLD HIT dx=81 → SendBackKey
+SendInput returned 4 (expected 4), GetLastError=0
+POINTER_DOWN  x=0 y=473  fg=00000000000503F4
+SWIPING started dx=13
+POINTER_UP/LEAVE  swiping=1 dx=10
+POINTER_DOWN  x=0 y=528  fg=00000000003E05AA
+SWIPING started dx=12
+THRESHOLD HIT dx=81 → SendBackKey
+SendInput returned 4 (expected 4), GetLastError=0
