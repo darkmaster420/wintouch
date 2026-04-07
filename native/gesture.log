@@ -12,3 +12,6 @@ POINTER_DOWN  x=0 y=528  fg=00000000003E05AA
 SWIPING started dx=12
 THRESHOLD HIT dx=81 → SendBackKey
 SendInput returned 4 (expected 4), GetLastError=0
+POINTER_DOWN  x=0 y=107  fg=00000000003E05AA
+SWIPING started dx=11
+POINTER_UP/LEAVE  swiping=1 dx=20
