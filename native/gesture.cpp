@@ -23,7 +23,7 @@
 #pragma comment(lib, "gdiplus.lib")
 
 // ── Configuration ───────────────────────────────────────────
-static constexpr int   STRIP_W       = 8;       // idle trigger-zone width
+static constexpr int   STRIP_W       = 16;      // idle trigger-zone width (wider for touch)
 static constexpr int   WAVE_W        = 250;     // max window width for wave
 static constexpr int   SWIPE_THRESH  = 80;      // px to fire back
 static constexpr int   MIN_DX        = 10;      // dead-zone
@@ -175,7 +175,7 @@ static void ResetState() {
     SetWindowLongW(g_hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED);
     SetWindowPos(g_hwnd, HWND_TOPMOST, 0, 0, STRIP_W, g_scrH,
                  SWP_NOMOVE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    SetLayeredWindowAttributes(g_hwnd, 0, 1, LWA_ALPHA);
+    SetLayeredWindowAttributes(g_hwnd, 0, 5, LWA_ALPHA);
 }
 
 static void EnterSwipeMode() {
@@ -262,6 +262,47 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         g_swiping  = false;
         g_dx       = 0;
         SetCapture(hwnd);
+        return 0;
+    }
+
+    case WM_TOUCH: {
+        UINT cInputs = LOWORD(wp);
+        TOUCHINPUT* ti = new TOUCHINPUT[cInputs];
+        if (GetTouchInputInfo((HTOUCHINPUT)lp, cInputs, ti, sizeof(TOUCHINPUT))) {
+            POINT pt = { ti[0].x / 100, ti[0].y / 100 };
+            DWORD flags = ti[0].dwFlags;
+            CloseTouchInputHandle((HTOUCHINPUT)lp);
+
+            if (flags & TOUCHEVENTF_DOWN) {
+                Log("WM_TOUCH DOWN x=%ld y=%ld", pt.x, pt.y);
+                g_start    = pt;
+                g_touchY   = (int)pt.y;
+                g_tracking = true;
+                g_swiping  = false;
+                g_dx       = 0;
+            } else if ((flags & TOUCHEVENTF_MOVE) && g_tracking) {
+                int dx = (int)(pt.x - g_start.x);
+                int dy = abs((int)(pt.y - g_start.y));
+                if (!g_swiping && dx > MIN_DX && dx > dy) {
+                    g_swiping = true;
+                    EnterSwipeMode();
+                    Log("SWIPING (touch) dx=%d", dx);
+                }
+                if (g_swiping) {
+                    g_dx = dx;
+                    Repaint();
+                    if (dx > SWIPE_THRESH) {
+                        Log("THRESHOLD (touch) dx=%d → SendBackKey", dx);
+                        SendBackKey();
+                        ResetState();
+                    }
+                }
+            } else if ((flags & TOUCHEVENTF_UP) && g_tracking) {
+                Log("WM_TOUCH UP swiping=%d dx=%d", g_swiping, g_dx);
+                ResetState();
+            }
+        }
+        delete[] ti;
         return 0;
     }
 
@@ -358,8 +399,11 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     if (!g_hwnd) return 1;
     Log("window created hwnd=%p", (void*)g_hwnd);
 
-    // Near-invisible but still hit-testable (alpha=1)
-    SetLayeredWindowAttributes(g_hwnd, 0, 1, LWA_ALPHA);
+    // Near-invisible but still hit-testable (alpha=5 for touch digitizer compat)
+    SetLayeredWindowAttributes(g_hwnd, 0, 5, LWA_ALPHA);
+
+    // Register for WM_TOUCH as fallback for digitizers that skip WM_POINTER
+    RegisterTouchWindow(g_hwnd, TWF_WANTPALM);
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0)) {

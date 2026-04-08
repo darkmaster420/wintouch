@@ -13,4 +13,6 @@ contextBridge.exposeInMainWorld('wintouch', {
   rejectApps: (paths) => ipcRenderer.invoke('launcher:reject-apps', paths),
   removeApp: (appPath) => ipcRenderer.invoke('launcher:remove-app', appPath),
   unrejectApp: (appPath) => ipcRenderer.invoke('launcher:unreject-app', appPath),
+  setGestureEnabled: (enabled) => ipcRenderer.invoke('gesture:set-enabled', enabled),
+  getGestureEnabled: () => ipcRenderer.invoke('gesture:get-enabled'),
 });

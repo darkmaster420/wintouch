@@ -288,6 +288,7 @@ function createTray() {
 
 function startGestureHelper() {
   if (process.platform !== 'win32') return;
+  if (gestureProcess && !gestureProcess.killed) return; // already running
 
   const exeName = 'gesture.exe';
   const exePath = isDev
@@ -299,6 +300,7 @@ function startGestureHelper() {
     return;
   }
 
+  console.log('[gesture] starting helper from', exePath);
   gestureProcess = spawn(exePath, [], {
     detached: false,
     stdio: 'ignore',
@@ -321,6 +323,10 @@ function stopGestureHelper() {
     gestureProcess.kill();
     gestureProcess = null;
   }
+}
+
+function isGestureRunning() {
+  return gestureProcess !== null && !gestureProcess.killed;
 }
 
 /* ---------- main window ---------- */
@@ -444,6 +450,19 @@ ipcMain.handle('launcher:pick-folder', async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
+});
+
+ipcMain.handle('gesture:set-enabled', async (_event, enabled) => {
+  if (enabled) {
+    startGestureHelper();
+  } else {
+    stopGestureHelper();
+  }
+  return enabled;
+});
+
+ipcMain.handle('gesture:get-enabled', async () => {
+  return isGestureRunning();
 });
 
 

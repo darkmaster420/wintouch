@@ -17,10 +17,18 @@ export function SettingsScreen({ onClose, iconSize, onIconSizeChange }: Props) {
   const [rejectedApps, setRejectedApps] = useState<LaunchableApp[]>([]);
   const [config, setConfig] = useState<ScanConfig | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedFolder[]>([]);
+  const [gestureEnabled, setGestureEnabled] = useState(true);
 
   useEffect(() => {
     void loadAll();
+    void window.wintouch?.getGestureEnabled().then((v) => setGestureEnabled(v));
   }, []);
+
+  async function toggleGesture() {
+    const next = !gestureEnabled;
+    await window.wintouch?.setGestureEnabled(next);
+    setGestureEnabled(next);
+  }
 
   async function loadAll() {
     const [loadedApps, loadedConfig, loadedSuggestions, loadedRejected] = await Promise.all([
@@ -257,6 +265,20 @@ export function SettingsScreen({ onClose, iconSize, onIconSizeChange }: Props) {
                 value={iconSize}
                 onChange={(e) => onIconSizeChange(Number(e.target.value))}
               />
+            </div>
+            <div className="settings-item">
+              <span className="settings-item-info">
+                <span className="folder-label">Back gesture</span>
+                <span className="folder-path">Swipe from left edge to go back</span>
+              </span>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={gestureEnabled}
+                  onChange={() => void toggleGesture()}
+                />
+                <span className="toggle-track" />
+              </label>
             </div>
           </div>
         )}
