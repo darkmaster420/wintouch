@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, screen, nativeImage, protocol } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, screen, nativeImage, protocol, Notification } = require('electron');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,6 +10,10 @@ let mainWindow;
 let nextServer;
 let tray = null;
 let gestureProcess = null;
+let gestureRetries = 0;
+const GESTURE_MAX_RETRIES = 3;
+const GESTURE_RETRY_DELAY = 1000;
+let gestureStopping = false;
 let isQuitting = false;
 
 const SCHEME = 'app';
@@ -286,9 +290,16 @@ function createTray() {
 
 /* ---------- left-edge swipe gesture ---------- */
 
+function gestureNotify(title, body) {
+  if (Notification.isSupported()) {
+    new Notification({ title, body, silent: true }).show();
+  }
+}
+
 function startGestureHelper() {
   if (process.platform !== 'win32') return;
   if (gestureProcess && !gestureProcess.killed) return; // already running
+  gestureStopping = false;
 
   const exeName = 'gesture.exe';
   const exePath = isDev
@@ -297,10 +308,11 @@ function startGestureHelper() {
 
   if (!fs.existsSync(exePath)) {
     console.warn('[gesture] helper not found at', exePath);
+    gestureNotify('Gesture', 'Helper not found — gesture disabled.');
     return;
   }
 
-  console.log('[gesture] starting helper from', exePath);
+  console.log('[gesture] starting helper from', exePath, `(attempt ${gestureRetries + 1})`);
   gestureProcess = spawn(exePath, [], {
     detached: false,
     stdio: 'ignore',
@@ -310,15 +322,45 @@ function startGestureHelper() {
   gestureProcess.on('error', (err) => {
     console.error('[gesture] failed to start helper:', err.message);
     gestureProcess = null;
+    retryGesture();
   });
 
   gestureProcess.on('exit', (code) => {
     console.log('[gesture] helper exited with code', code);
     gestureProcess = null;
+    if (gestureStopping || isQuitting) {
+      gestureNotify('Gesture', 'Back gesture disabled.');
+      return;
+    }
+    // Unexpected exit — retry
+    retryGesture();
   });
+
+  // Verify the process actually started after a short delay
+  setTimeout(() => {
+    if (gestureProcess && !gestureProcess.killed) {
+      gestureRetries = 0; // reset on success
+      gestureNotify('Gesture', 'Back gesture enabled.');
+    }
+  }, 500);
+}
+
+function retryGesture() {
+  if (gestureStopping || isQuitting) return;
+  gestureRetries++;
+  if (gestureRetries <= GESTURE_MAX_RETRIES) {
+    console.log(`[gesture] retrying in ${GESTURE_RETRY_DELAY}ms (attempt ${gestureRetries}/${GESTURE_MAX_RETRIES})`);
+    setTimeout(() => startGestureHelper(), GESTURE_RETRY_DELAY);
+  } else {
+    console.error('[gesture] max retries reached, giving up');
+    gestureNotify('Gesture', 'Failed to start after multiple attempts.');
+    gestureRetries = 0;
+  }
 }
 
 function stopGestureHelper() {
+  gestureStopping = true;
+  gestureRetries = 0;
   if (gestureProcess) {
     gestureProcess.kill();
     gestureProcess = null;
