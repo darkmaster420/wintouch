@@ -234,11 +234,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_swiping) {
             g_dx = dx;
             Repaint();
-            if (dx > SWIPE_THRESH) {
-                Log("THRESHOLD HIT dx=%d → SendBackKey", dx);
-                SendBackKey();
-                ResetState();
-            }
         }
         return 0;
     }
@@ -248,6 +243,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_POINTERCAPTURECHANGED:
         if (g_tracking) {
             Log("POINTER_UP/LEAVE  swiping=%d dx=%d", g_swiping, g_dx);
+            if (g_swiping && g_dx > SWIPE_THRESH) {
+                Log("SWIPE COMPLETE dx=%d \u2192 SendBackKey", g_dx);
+                SendBackKey();
+            }
             ResetState();
         }
         return 0;
@@ -291,14 +290,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (g_swiping) {
                     g_dx = dx;
                     Repaint();
-                    if (dx > SWIPE_THRESH) {
-                        Log("THRESHOLD (touch) dx=%d → SendBackKey", dx);
-                        SendBackKey();
-                        ResetState();
-                    }
                 }
             } else if ((flags & TOUCHEVENTF_UP) && g_tracking) {
                 Log("WM_TOUCH UP swiping=%d dx=%d", g_swiping, g_dx);
+                if (g_swiping && g_dx > SWIPE_THRESH) {
+                    Log("SWIPE COMPLETE (touch) dx=%d \u2192 SendBackKey", g_dx);
+                    SendBackKey();
+                }
                 ResetState();
             }
         }
@@ -322,12 +320,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_swiping) {
             g_dx = dx;
             Repaint();
-            if (dx > SWIPE_THRESH) {
-                Log("THRESHOLD (mouse) dx=%d → SendBackKey", dx);
-                SendBackKey();
-                ReleaseCapture();
-                ResetState();
-            }
         }
         return 0;
     }
@@ -335,6 +327,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_LBUTTONUP:
         if (g_tracking) {
             Log("WM_LBUTTONUP  swiping=%d dx=%d", g_swiping, g_dx);
+            if (g_swiping && g_dx > SWIPE_THRESH) {
+                Log("SWIPE COMPLETE (mouse) dx=%d \u2192 SendBackKey", g_dx);
+                SendBackKey();
+            }
             ReleaseCapture();
             ResetState();
         }
