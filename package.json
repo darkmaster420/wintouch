@@ -54,6 +54,12 @@
       ],
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
+    "extraResources": [
+      {
+        "from": "native/gesture.exe",
+        "to": "gesture.exe"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

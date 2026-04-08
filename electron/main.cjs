@@ -302,12 +302,16 @@ function startGestureHelper() {
   gestureStopping = false;
 
   const exeName = 'gesture.exe';
-  const exePath = isDev
-    ? path.join(__dirname, '..', 'native', exeName)
-    : path.join(process.resourcesPath, exeName);
+  // Try multiple paths: dev (relative to electron/), production (resources), CWD fallback
+  const candidates = [
+    path.join(__dirname, '..', 'native', exeName),
+    path.join(process.resourcesPath || '', exeName),
+    path.join(process.cwd(), 'native', exeName),
+  ];
+  const exePath = candidates.find(p => fs.existsSync(p));
 
-  if (!fs.existsSync(exePath)) {
-    console.warn('[gesture] helper not found at', exePath);
+  if (!exePath) {
+    console.warn('[gesture] helper not found, tried:', candidates);
     gestureNotify('Gesture', 'Helper not found — gesture disabled.');
     return;
   }
