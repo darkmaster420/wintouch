@@ -511,6 +511,16 @@ ipcMain.handle('gesture:get-enabled', async () => {
   return isGestureRunning();
 });
 
+ipcMain.handle('app:get-auto-launch', async () => {
+  const settings = app.getLoginItemSettings();
+  return settings.openAtLogin;
+});
+
+ipcMain.handle('app:set-auto-launch', async (_event, enabled) => {
+  app.setLoginItemSettings({ openAtLogin: enabled });
+  return enabled;
+});
+
 
 
 app.whenReady().then(async () => {

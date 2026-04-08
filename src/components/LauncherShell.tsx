@@ -27,6 +27,8 @@ declare global {
       unrejectApp: (appPath: string) => Promise<void>;
       setGestureEnabled: (enabled: boolean) => Promise<boolean>;
       getGestureEnabled: () => Promise<boolean>;
+      getAutoLaunch: () => Promise<boolean>;
+      setAutoLaunch: (enabled: boolean) => Promise<boolean>;
     };
   }
 }

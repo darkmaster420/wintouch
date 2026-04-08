@@ -18,16 +18,24 @@ export function SettingsScreen({ onClose, iconSize, onIconSizeChange }: Props) {
   const [config, setConfig] = useState<ScanConfig | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedFolder[]>([]);
   const [gestureEnabled, setGestureEnabled] = useState(true);
+  const [autoLaunch, setAutoLaunch] = useState(false);
 
   useEffect(() => {
     void loadAll();
     void window.wintouch?.getGestureEnabled().then((v) => setGestureEnabled(v));
+    void window.wintouch?.getAutoLaunch().then((v) => setAutoLaunch(v));
   }, []);
 
   async function toggleGesture() {
     const next = !gestureEnabled;
     await window.wintouch?.setGestureEnabled(next);
     setGestureEnabled(next);
+  }
+
+  async function toggleAutoLaunch() {
+    const next = !autoLaunch;
+    await window.wintouch?.setAutoLaunch(next);
+    setAutoLaunch(next);
   }
 
   async function loadAll() {
@@ -276,6 +284,20 @@ export function SettingsScreen({ onClose, iconSize, onIconSizeChange }: Props) {
                   type="checkbox"
                   checked={gestureEnabled}
                   onChange={() => void toggleGesture()}
+                />
+                <span className="toggle-track" />
+              </label>
+            </div>
+            <div className="settings-item">
+              <span className="settings-item-info">
+                <span className="folder-label">Launch on startup</span>
+                <span className="folder-path">Start Wintouch when you sign in</span>
+              </span>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={autoLaunch}
+                  onChange={() => void toggleAutoLaunch()}
                 />
                 <span className="toggle-track" />
               </label>

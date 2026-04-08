@@ -23,7 +23,7 @@
 #pragma comment(lib, "gdiplus.lib")
 
 // ── Configuration ───────────────────────────────────────────
-static constexpr int   STRIP_W       = 16;      // idle trigger-zone width (wider for touch)
+static constexpr int   STRIP_W       = 32;      // idle trigger-zone width (wide for touch)
 static constexpr int   WAVE_W        = 250;     // max window width for wave
 static constexpr int   SWIPE_THRESH  = 80;      // px to fire back
 static constexpr int   MIN_DX        = 10;      // dead-zone
